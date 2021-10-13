@@ -1,0 +1,10 @@
+# Python env
+/.env
+*.pyc
+.ipynb_checkpoints
+
+# Training logs
+/lightning_logs/
+
+# Datasets
+datasets/
