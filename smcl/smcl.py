@@ -7,16 +7,45 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 
 
 class SMCL(nn.RNN):
+    """Sequential Monte Carlo Layer.
 
-    """Sequential Monte Carlo Network."""
+    This hybrid layer enables computing particle filter based on an RNN architecture and
+    weights. For traditional inference and learning, the forward function falls back to
+    the inherited PyTorch RNN function, followed by a Linear application, for maximum
+    compatibility and speed.
 
-    def __init__(self, input_size, hidden_size, output_size, n_particles=100, **kwargs):
+    In this document, we refer to dimensions as:
+
+     - `BATCH_SIZE`: batch size.
+     - `D_IN`: input size.
+     - `D_HIDDEN`: hidden dimension.
+     - `D_OUT`: output dimension.
+     - `T`: number of time steps.
+     - `N`: number of particles.
+
+    Arguments
+    ---------
+    input_size: dimension of input vectors at each time step (`D_IN`).
+    hidden_size: dimension of the state space vectors (`D_HIDDEN`)
+    output_size: dimension of observations samples at each time step (`D_OUT`).
+    n_particles: number of particles when computing particle filter (`N`).
+    Default `100`.
+    """
+
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        output_size: int,
+        n_particles: int = 100,
+        **kwargs
+    ):
         super().__init__(input_size=input_size, hidden_size=hidden_size, **kwargs)
 
         assert self.num_layers == 1, "SMCL is restricted to a single layer."
-        assert self.batch_first == False, "SMCL isn't implemented for batch fisrt."
+        assert self.batch_first == False, "SMCL isn't implemented for batch first."
         assert self.dropout == 0, "SMCL is restricted to zero dropout"
-        assert self.bidirectional == False, "SMCL resitricted to unidirectional."
+        assert self.bidirectional == False, "SMCL restricted to unidirectional."
 
         self._output_size = output_size
         self._n_particles = n_particles
@@ -33,22 +62,38 @@ class SMCL(nn.RNN):
         self.softmax = nn.Softmax(dim=1)
 
     @property
-    def sigma_x2(self):
+    def sigma_x2(self) -> torch.Tensor:
         return torch.diag(self._sigma_x)
 
     @sigma_x2.setter
-    def sigma_x2(self, matrix):
+    def sigma_x2(self, matrix: torch.Tensor):
         self._sigma_x.data = torch.diag(matrix)
 
     @property
-    def sigma_y2(self):
+    def sigma_y2(self) -> torch.Tensor:
         return torch.diag(self._sigma_y)
 
     @sigma_y2.setter
-    def sigma_y2(self, matrix):
+    def sigma_y2(self, matrix: torch.Tensor):
         self._sigma_y.data = torch.diag(matrix)
 
-    def _g(self, input_vector, hidden_vector, noise_function=None):
+    def _g(
+        self, input_vector: torch.Tensor, hidden_vector: torch.Tensor
+    ) -> torch.Tensor:
+        """Modified state space model.
+
+        Compute the same RNNCell function as in PyTorch, without the activation
+        function.
+
+        Arguments
+        ---------
+        input_tensor: input vector with dimension `(BATCH_SIZE, N, D_IN)`.
+        hidden_tensor: hidden vector with dimension `(BATCH_SIZE, N, D_HIDDEN)`.
+
+        Returns
+        -------
+        Output tensor with dimension `(BATCH_SIZE, N, D_HIDDEN)`
+        """
         input_vector = F.linear(
             input_vector, weight=self.weight_ih_l0, bias=self.bias_ih_l0
         )
@@ -57,11 +102,26 @@ class SMCL(nn.RNN):
         )
         input_vector = input_vector.unsqueeze(-2)
         output = input_vector + hidden_vector
-        if noise_function is not None:
-            output = output + noise_function()
         return output
 
-    def forward(self, u, y=None, noise=False):
+    def forward(self, u: torch.Tensor, y: torch.Tensor = None) -> torch.Tensor:
+        """Compute inference as traditional RNN or particle filter.
+
+        If the observation tensor `y` is not provided, the function falls back to the
+        inherited PyTorch forward function. Otherwise, we compute the particle filter
+        given the observations. Missing observations can be provided with value
+        `float('nan')`.
+
+        Arguments
+        ---------
+        u: input tensor with shape `(T, BATCH_SIZE, D_IN)`.
+        y: observation tensor with shape `(T, BATCH_SIZE, D_OUT)`.
+
+        Returns
+        -------
+        Predictions tensor with shape `(T, BATCH_SIZE, N, D_OUT)`. In case observations
+        are not provided, `N` is set to `1` and the third dimension is squeezed.
+        """
         if y is None:
             netout = super().forward(u)[0]
             netout = self._f(netout)
@@ -82,7 +142,6 @@ class SMCL(nn.RNN):
             loc=torch.zeros(x.shape, device=self.sigma_x2.device),
             covariance_matrix=self.sigma_x2,
         )
-        noise_function = self._eta.sample
 
         # Iterate k through time
         for k in range(T):
@@ -98,7 +157,7 @@ class SMCL(nn.RNN):
                 x = self.__class__.select_indices(x, I)
 
             # Compute new hidden state
-            x = torch.tanh(self._g(u[k], x, noise_function=noise_function))
+            x = torch.tanh(self._g(u[k], x) + self._eta.sample())
             self._particules.append(x)
 
             # Compute new weights
@@ -110,7 +169,21 @@ class SMCL(nn.RNN):
 
         return torch.stack(predictions)
 
-    def compute_weights(self, y, y_hat):
+    def compute_weights(self, y: torch.Tensor, y_hat: torch.Tensor) -> torch.Tensor:
+        """Compute importance weights for predictions.
+
+        Compute weights associated with particles' predictions.
+
+        Arguments
+        ---------
+        y: observations with shape `(BATCH_SIZE, D_OUT)`.
+        y_hat: predictions, associated with particles, with shape `(BATCH_SIZE, N,
+        D_OUT)`.
+
+        Returns
+        -------
+        Weights with shape `(BATCH_SIZE, N)`.
+        """
         _normal_y = MultivariateNormal(y, covariance_matrix=self.sigma_y2)
         w = _normal_y.log_prob(y_hat).T
         w = self.softmax(w)
@@ -122,7 +195,6 @@ class SMCL(nn.RNN):
             [x[batch_idx, particule_idx] for batch_idx, particule_idx in enumerate(I)]
         ).view(x.shape)
 
-    # @classmethod
     def smooth_pms(self, x, I):
         N = I.shape[-1]
         T = x.shape[0]
