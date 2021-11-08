@@ -5,45 +5,52 @@ import matplotlib.pyplot as plt
 import torch
 
 
-def plot_predictions(model: callable, dataloader, target_columns: list):
-    with torch.no_grad():
-        netout = model(dataloader.dataset._u.unsqueeze(0).transpose(0, 1))
+@torch.no_grad()
+def plot_predictions(
+    model: callable,
+    dataset: torch.utils.data.dataset.Dataset,
+    batch_size: int = 32,
+    num_workers: int = 4,
+):
+    """Plot predictions on the Oze Dataset.
 
-    netout = netout.numpy()[:, 0]
+    For every targeted variable, plot prediction against ground truth.
 
-    observations = dataloader.dataset.y.numpy()
-    netout = dataloader.dataset.rescale(netout, "observation")
+    Parameters
+    ----------
+    model: prediction model.
+    dataset: instance of Oze Dataset.
+    batch_size: batch size to iterate over the dataset.
+    num_workers: num workers to iterate over the dataset.
+    """
+    # Create dataloader
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False
+    )
 
-    n_plots = netout.shape[1]
-    plt.figure(figsize=(25, n_plots * 5))
-    for idx_plot, (observation, prediction) in enumerate(zip(observations.T, netout.T)):
+    # Load target plots from dataset
+    targets = dataset.y
+    d_out = targets.shape[-1]
 
-        plt.subplot(n_plots, 1, idx_plot + 1)
-        plt.plot(observation, label="observation", lw=3)
-        plt.plot(prediction, label="prediction")
-        plt.title(target_columns[idx_plot])
-        plt.legend()
+    # Compute predictions from model
+    predictions = []
+    for inputs, _ in dataloader:
+        inputs = inputs.transpose(0, 1)
+        predictions.append(model(inputs))
+    predictions = torch.cat(predictions, dim=1)
+    predictions = predictions.transpose(0, 1).reshape(-1, d_out)
 
+    # Rescale shit
+    targets = dataloader.dataset.rescale(targets, "observation")
+    predictions = dataloader.dataset.rescale(predictions, "observation")
 
-def plot_daily_predictions(model, dataloader):
-    n_days = len(dataloader.dataset)
-    targets = []
-    outputs = []
-    for idx_sample in range(n_days):
-        sample_inputs, sample_targets = dataloader.dataset[idx_sample]
-        targets.append(sample_targets)
-        with torch.no_grad():
-            outputs.append(model(sample_inputs.unsqueeze(1))[:, 0])
+    # Plot shit
+    _, axes = plt.subplots(d_out, 1, sharex=True, squeeze=False, figsize=(25, 5*d_out))
+    for target, prediction, ax in zip(targets.T, predictions.T, axes[:, 0]):
+        ax.plot(target.numpy(), label="observations", lw=3)
+        ax.plot(prediction.numpy(), label="predictions")
+        ax.legend()
 
-    targets = dataloader.dataset.rescale(torch.cat(targets), "observation")
-    outputs = dataloader.dataset.rescale(torch.cat(outputs), "observation")
-
-
-    for target, output in zip(targets.T, outputs.T):
-        plt.figure()
-        plt.plot(target.numpy(), label="observations", lw=3)
-        plt.plot(output.numpy(), label="predictions")
-        plt.legend()
 
 def compute_occupancy(
     date: datetime, delta: float = 15.0, talon: float = 0.2
