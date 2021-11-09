@@ -1,13 +1,30 @@
+from typing import Union
+
 import torch
 
-# TODO: Add wrapper function as decorator for dataloader iteration
+def criteria_MSE(model, u, y):
+    return torch.nn.functional.mse_loss(model(u), y, reduction="none")
+
+
+def criteria_PICP(model, u, y):
+    netout = model(u, y)
+    lower_bound = netout.min(dim=2).values
+    upper_bound = netout.max(dim=2).values
+    return ((lower_bound < y) & (y < upper_bound)).to(dtype=torch.float32)
+
+
+def criteria_MPIW(model, u, y):
+    netout = model(u, y)
+    lower_bound = netout.min(dim=2).values
+    upper_bound = netout.max(dim=2).values
+    return upper_bound - lower_bound
 
 
 @torch.no_grad()
 def compute_cost(
     model: callable,
     dataloader: torch.utils.data.DataLoader,
-    criteria: callable = None,
+    criteria: Union[callable, str] = "mse",
     reduction: str = "none",
 ) -> torch.Tensor:
     """Compute given cost for the model over the given dataloader.
@@ -27,44 +44,26 @@ def compute_cost(
     -------
     Cost tensor with shape `(n_samples x T)` if reduction is `"none"`, scalar if `"mean"`.
     """
-    criteria = criteria or torch.nn.MSELoss(reduction="none")
-    running_loss = []
+    if isinstance(criteria, str):
+        try:
+            criteria = {
+                "mse": criteria_MSE,
+                "picp": criteria_PICP,
+                "mpiw": criteria_MPIW,
+            }[criteria]
+        except KeyError:
+            raise NameError(f"Critera {criteria} unkown.")
+    cost = []
     for u, y in dataloader:
         u = u.transpose(0, 1)
         y = y.transpose(0, 1)
-        netout = model(u)
-        running_loss.append(criteria(netout, y))
-    # Concatenate batch and time dimension
-    d_out = y.shape[-1]
-    running_loss = torch.cat(running_loss, dim=1).reshape(-1, d_out).mean(-1)
+        cost.append(criteria(model, u, y))
+    # Concatenate running cost on batch dimension
+    cost = torch.cat(cost, dim=1)
+    # Average results on feature dimension
+    cost = cost.mean(dim=-1)
+    # Flatten batch and time dimension
+    # cost = cost.flatten(end_dim=1)
     if reduction == "mean":
-        running_loss = running_loss.mean()
-    return running_loss
-
-
-@torch.no_grad()
-def pi_metrics(model, dataloader, day_hide=0):
-    """Compute PCIP and MPIW.
-
-    Introduced in https://arxiv.org/pdf/1802.07167.pdf
-    Prediction Interval Coverage Probability
-    Mean Prediction Interval Width
-    """
-    picp = []
-    mpiw = []
-
-    for u, y in dataloader:
-        u = u.transpose(0, 1)
-        y = y.transpose(0, 1)
-
-        netout = model(u=u, y=y)
-
-        lower_bound = netout.min(dim=2).values
-        upper_bound = netout.max(dim=2).values
-
-        picp.append(((lower_bound < y) & (y < upper_bound)).to(dtype=torch.float))
-        mpiw.append((upper_bound - lower_bound))
-
-    picp = torch.cat(picp, dim=1).mean(axis=0).mean(axis=-1)
-    mpiw = torch.cat(mpiw, dim=1).mean(axis=0).mean(axis=-1)
-    return picp, mpiw
+        cost = cost.mean()
+    return cost
