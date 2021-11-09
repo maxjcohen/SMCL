@@ -45,7 +45,9 @@ def plot_predictions(
     predictions = dataloader.dataset.rescale(predictions, "observation")
 
     # Plot shit
-    _, axes = plt.subplots(d_out, 1, sharex=True, squeeze=False, figsize=(25, 5*d_out))
+    _, axes = plt.subplots(
+        d_out, 1, sharex=True, squeeze=False, figsize=(25, 5 * d_out)
+    )
     for target, prediction, ax in zip(targets.T, predictions.T, axes[:, 0]):
         ax.plot(target.numpy(), label="observations", lw=3)
         ax.plot(prediction.numpy(), label="predictions")

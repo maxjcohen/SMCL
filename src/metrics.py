@@ -4,7 +4,12 @@ import torch
 
 
 @torch.no_grad()
-def compute_cost(model: callable, dataloader: torch.utils.data.DataLoader, criteria: callable=None, reduction: str="none") -> torch.Tensor:
+def compute_cost(
+    model: callable,
+    dataloader: torch.utils.data.DataLoader,
+    criteria: callable = None,
+    reduction: str = "none",
+) -> torch.Tensor:
     """Compute given cost for the model over the given dataloader.
 
     Iterate over the dataloader, computing the given cost (default to MSE). Results can
