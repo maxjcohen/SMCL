@@ -9,7 +9,7 @@ from .utils import compute_occupancy
 
 class OzeDataset(Dataset):
     input_columns = [
-        "TAMB",
+        "temperature_interieure",
         "IGLOB_H",
         "RHUM",
         "IDIFF_H",
