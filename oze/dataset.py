@@ -18,7 +18,9 @@ class OzeDataset(Dataset):
         "GK",
         "occupancy",
     ]
-    target_columns = ["taux_co2", "humidite"]
+    target_columns = [
+        "humidite",
+    ]
 
     def __init__(self, df, T, val=False):
         self.T = T
