@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.distributions import TransformedDistribution, TanhTransform
 
 # TODO: swich for range with joint iteration over u and y
 
@@ -77,6 +78,25 @@ class SMCL(nn.RNN):
     def sigma_y2(self, matrix: torch.Tensor):
         self._sigma_y.data = torch.diag(matrix)
 
+    def PX0(self):
+        return MultivariateNormal(
+            loc=torch.zeros(self._sigma_x.shape, device=self.sigma_x2.device),
+            covariance_matrix=self.sigma_x2,
+        )
+
+    def PX(self, t, xp, u):
+        px = MultivariateNormal(
+            loc=self._f(u, xp),
+            covariance_matrix=self.sigma_x2,
+        )
+        return TransformedDistribution(px, TanhTransform())
+
+    def PY(self, t, xp, x):
+        return MultivariateNormal(
+            loc=self._g(x),
+            covariance_matrix=self.sigma_y2,
+        )
+
     def _f(
         self, input_vector: torch.Tensor, hidden_vector: torch.Tensor
     ) -> torch.Tensor:
@@ -137,11 +157,7 @@ class SMCL(nn.RNN):
         self._W = []
 
         # Generate initial particles
-        x = torch.zeros(bs, self.N, self.hidden_size, device=u.device)
-        self._eta = MultivariateNormal(
-            loc=torch.zeros(x.shape, device=self.sigma_x2.device),
-            covariance_matrix=self.sigma_x2,
-        )
+        x = self.PX0().rsample((bs, self.N))
 
         # Iterate k through time
         for k in range(T):
@@ -157,11 +173,11 @@ class SMCL(nn.RNN):
                 x = self.__class__.select_indices(x, I)
 
             # Compute new hidden state
-            x = torch.tanh(self._f(u[k], x) + self._eta.sample())
+            x = self.PX(k, x, u[k]).rsample()
             self._particules.append(x)
 
             # Compute new weights
-            y_hat = self._g(x)
+            y_hat = self.PY(k, 0, x).loc
             predictions.append(y_hat)
 
         self.w = self.compute_weights(y[-1], predictions[-1].transpose(0, 1))
