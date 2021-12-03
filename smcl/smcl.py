@@ -50,7 +50,7 @@ class SMCL(nn.RNN):
         self._output_size = output_size
         self._n_particles = n_particles
 
-        self._f = nn.Linear(self.hidden_size, self._output_size)
+        self._g = nn.Linear(self.hidden_size, self._output_size)
 
         self._sigma_x = nn.Parameter(
             torch.randn(self.hidden_size).abs(), requires_grad=False
@@ -77,7 +77,7 @@ class SMCL(nn.RNN):
     def sigma_y2(self, matrix: torch.Tensor):
         self._sigma_y.data = torch.diag(matrix)
 
-    def _g(
+    def _f(
         self, input_vector: torch.Tensor, hidden_vector: torch.Tensor
     ) -> torch.Tensor:
         """Modified state space model.
@@ -124,7 +124,7 @@ class SMCL(nn.RNN):
         """
         if y is None:
             netout = super().forward(u)[0]
-            netout = self._f(netout)
+            netout = self._g(netout)
             return netout
         self._u = u
 
@@ -157,11 +157,11 @@ class SMCL(nn.RNN):
                 x = self.__class__.select_indices(x, I)
 
             # Compute new hidden state
-            x = torch.tanh(self._g(u[k], x) + self._eta.sample())
+            x = torch.tanh(self._f(u[k], x) + self._eta.sample())
             self._particules.append(x)
 
             # Compute new weights
-            y_hat = self._f(x)
+            y_hat = self._g(x)
             predictions.append(y_hat)
 
         self.w = self.compute_weights(y[-1], predictions[-1].transpose(0, 1))
@@ -227,13 +227,13 @@ class SMCL(nn.RNN):
 
         # Compute likelihood
         normal_y = MultivariateNormal(y.unsqueeze(-2), covariance_matrix=self.sigma_y2)
-        loss_y = -normal_y.log_prob(self._f(particules)) * self.w.detach()
+        loss_y = -normal_y.log_prob(self._g(particules)) * self.w.detach()
         loss_y = loss_y.sum(-1)
 
         normal_x = MultivariateNormal(
             torch.atanh(particules[1:]), covariance_matrix=self.sigma_x2
         )
-        loss_x = -normal_x.log_prob(self._g(self._u[1:], particules[:-1]))
+        loss_x = -normal_x.log_prob(self._f(self._u[1:], particules[:-1]))
         # Log of d arctanh(x)
         ldx = torch.log(
             1 - particules[1:].square() + torch.finfo(torch.float32).eps
@@ -249,7 +249,7 @@ class SMCL(nn.RNN):
         # Smooth
         particules = self.smooth_pms(self.particules, self.I).detach()
 
-        sigma_y2 = y.unsqueeze(-2) - self._f(particules)
+        sigma_y2 = y.unsqueeze(-2) - self._g(particules)
 
         # Compute square
         sigma_y2 = sigma_y2.square()
@@ -270,7 +270,7 @@ class SMCL(nn.RNN):
         # Smooth
         particules = self.smooth_pms(self.particules, self.I).detach()
 
-        sigma_x2 = torch.atanh(particules[1:]) - self._g(self._u[1:], particules[:-1])
+        sigma_x2 = torch.atanh(particules[1:]) - self._f(self._u[1:], particules[:-1])
 
         # Compute square
         sigma_x2 = sigma_x2.square()
