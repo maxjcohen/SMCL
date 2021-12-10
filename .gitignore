@@ -5,6 +5,10 @@
 
 # Training logs
 /lightning_logs/
+.aim
 
 # Datasets
 datasets/
+
+# Trainings and tensors
+/weights/
