@@ -9,14 +9,8 @@ from .utils import compute_occupancy
 
 class OzeDataset(Dataset):
     input_columns = [
-        "temperature_interieure",
-        "IGLOB_H",
+        "temperature_exterieure",
         "RHUM",
-        "IDIFF_H",
-        "IBEAM_H",
-        "IBEAM_N",
-        "GK",
-        "occupancy",
     ]
     target_columns = [
         "humidite",
