@@ -3,23 +3,44 @@
 
 import copy
 
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 import pytorch_lightning as pl
+from aim.pytorch_lightning import AimLogger
 
 from smcl.smcl import SMCL
 from oze.utils import plot_predictions
 from oze.dataset import OzeDataset
-from src.metrics import pi_metrics, compute_cost
+from src.litmodules import LitSMCModule, LitClassicModule
+from src.metrics import compute_cost, cumulative_cost
 from src.utils import (
     plot_range,
     uncertainty_estimation,
-    LitProgressBar,
     boxplotprediction,
 )
+
+# Params
+class args:
+    dataset_path = "datasets/data_2020_2021.csv"
+    T = 24 * 7
+
+    # Model
+    d_emb = 8
+    n = 200
+
+    # Training
+    batch_size = 16
+    epochs = 10
+    epochs_smcn = 10
+
+    train = ["smcl"]
+
+    save_path = None
+    load_path = "weights/pretrain.pt"
 
 # Set manual seeds
 torch.manual_seed(1)
@@ -27,39 +48,31 @@ torch.manual_seed(1)
 # Matplotlib defaults
 plt.rcParams.update({"font.size": 25, "figure.figsize": (25, 5)})
 
-# PyTorch Lightning loading bar
-bar = LitProgressBar()
+def train(train_model, exp_name, args):
+    trainer = pl.Trainer(
+        max_epochs=args.epochs,
+        gpus=1,
+        logger=AimLogger(experiment=exp_name, system_tracking_interval=None),
+    )
+    trainer.fit(train_model, dataloader_train, val_dataloaders=dataloader_val)
 
-# Dataset
-PATH_DATASET = "datasets/data_oze.csv"
-T = 24 * 7
-
-# Model
-D_EMB = 8
-N = 200
-
-# Training
-BATCH_SIZE = 16
-EPOCHS = 10
-EPOCHS_SMCN = 100
-
-## Dataset
-
-df = pd.read_csv(PATH_DATASET)[5 * 24 :]
+# Load dataset
+df = pd.read_csv(args.dataset_path)[5 * 24 :]
 OzeDataset.preprocess(df)
-df.sample(5)
-
+# Plot input and outputs
+# TODO move to logger
 _ = df[[*OzeDataset.input_columns, *OzeDataset.target_columns]].plot(
-    subplots=True, figsize=(25, 40)
+    subplots=True,
+    figsize=(25, 3 * (len(OzeDataset.input_columns + OzeDataset.target_columns))),
 )
+# Define dataloaders
 dataloader_train = DataLoader(
-    OzeDataset(df, T=T, val=False), batch_size=BATCH_SIZE, num_workers=4, shuffle=True
+    OzeDataset(df, T=args.T, val=False), batch_size=args.batch_size, num_workers=4, shuffle=True
 )
 dataloader_val = DataLoader(
-    OzeDataset(df, T=T, val=True), batch_size=BATCH_SIZE, num_workers=4, shuffle=False
+    OzeDataset(df, T=args.T, val=True), batch_size=args.batch_size, num_workers=4, shuffle=False
 )
 
-## Model
 
 # We combine a generic input model (3 layered GRU) with a smc layer
 class SMCM(nn.Module):
@@ -67,7 +80,7 @@ class SMCM(nn.Module):
         super().__init__()
 
         self.input_model = nn.GRU(
-            input_size=input_size, hidden_size=hidden_size, num_layers=3
+            input_size=input_size, hidden_size=hidden_size, num_layers=3, dropout=0.2
         )
         self.smcl = SMCL(
             input_size=hidden_size,
@@ -88,44 +101,28 @@ class SMCM(nn.Module):
         )
 
 
+# TODO remove MAJ
 D_IN = len(OzeDataset.input_columns)
 D_OUT = len(OzeDataset.target_columns)
-model = SMCM(input_size=D_IN, hidden_size=D_EMB, output_size=D_OUT)
 
-## Traditional training
-class LitClassicModule(pl.LightningModule):
-    def __init__(self, model, lr=1e-3):
-        super().__init__()
-        self.model = model
-        self.lr = lr
-        self.criteria = torch.nn.MSELoss()
+model = SMCM(input_size=D_IN, hidden_size=args.d_emb, output_size=D_OUT)
+if args.load_path is not None:
+    model.load_state_dict(torch.load(args.load_path))
+    print("Loaded model weights.")
 
-    def training_step(self, batch, batch_idx):
-        u, y = batch
-        u = u.transpose(0, 1)
-        y = y.transpose(0, 1)
+if "classic" in args.train:
+    train_model = LitClassicModule(model, lr=1e-3)
+    exp_name = "pretrain"
+    train(train_model, exp_name, args)
+elif "smcl" in args.train:
+    train_model = LitSMCModule(model, lr=1e-3)
+    exp_name = "smcl"
+    train(train_model, exp_name, args)
 
-        y_hat = self.model(u)
-        loss = self.criteria(y, y_hat)
-
-        return loss
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        return optimizer
-
-
-train_model = LitClassicModule(model, lr=1e-2)
-trainer = pl.Trainer(max_epochs=EPOCHS, gpus=1, callbacks=[bar])
-trainer.fit(train_model, dataloader_train)
-
-# Save pretrain parameters
-params_pretrain = copy.deepcopy(model.state_dict())
-
-# Compute cost (default to MSE) mean and variance
-losses = compute_cost(model, dataloader_val)
-print(f"MSE:\t{losses.mean():.2f} \pm {losses.var():.4f}")
+if args.save_path is not None:
+    torch.save(model.state_dict(), args.save_path)
 
 plot_predictions(model, dataloader_train.dataset)
 plot_predictions(model, dataloader_val.dataset)
+
 plt.show()
