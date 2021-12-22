@@ -63,12 +63,6 @@ def train(train_model, exp_name, args):
 # Load dataset
 df = pd.read_csv(args.dataset_path)[5 * 24 :]
 OzeDataset.preprocess(df)
-# Plot input and outputs
-# TODO move to logger
-_ = df[[*OzeDataset.input_columns, *OzeDataset.target_columns]].plot(
-    subplots=True,
-    figsize=(25, 3 * (len(OzeDataset.input_columns + OzeDataset.target_columns))),
-)
 
 
 def collate_fn(batch):
@@ -100,24 +94,24 @@ d_in = len(OzeDataset.input_columns)
 d_out = len(OzeDataset.target_columns)
 model = SMCM(input_size=d_in, hidden_size=args.d_emb, output_size=d_out, N=args.N)
 
-model = SMCM(input_size=d_in, hidden_size=args.d_emb, output_size=d_out)
-if args.load_path is not None:
-    model.load_state_dict(torch.load(args.load_path))
-    print("Loaded model weights.")
+if __name__ == "__main__":
+    if args.load_path is not None:
+        model.load_state_dict(torch.load(args.load_path))
+        print("Loaded model weights.")
 
-if "classic" in args.train:
-    train_model = LitClassicModule(model, lr=1e-3)
-    exp_name = "pretrain"
-    train(train_model, exp_name, args)
-elif "smcl" in args.train:
-    train_model = LitSMCModule(model, lr=1e-3)
-    exp_name = "smcl"
-    train(train_model, exp_name, args)
+    if "classic" in args.train:
+        train_model = LitClassicModule(model, lr=1e-3)
+        exp_name = "pretrain"
+        train(train_model, exp_name, args)
+    elif "smcl" in args.train:
+        train_model = LitSMCModule(model, lr=1e-3)
+        exp_name = "smcl"
+        train(train_model, exp_name, args)
 
-if args.save_path is not None:
-    torch.save(model.state_dict(), args.save_path)
+    if args.save_path is not None:
+        torch.save(model.state_dict(), args.save_path)
 
-plot_predictions(model, dataloader_train.dataset)
-plot_predictions(model, dataloader_val.dataset)
+    plot_predictions(model, dataloader_train.dataset)
+    plot_predictions(model, dataloader_val.dataset)
 
-plt.show()
+    plt.show()
