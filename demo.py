@@ -15,6 +15,7 @@ from aim.pytorch_lightning import AimLogger
 from smcl.smcl import SMCL
 from oze.utils import plot_predictions
 from oze.dataset import OzeDataset
+from src.modules import SMCM
 from src.litmodules import LitSMCModule, LitClassicModule
 from src.metrics import compute_cost, cumulative_cost
 from src.utils import (
@@ -94,35 +95,10 @@ dataloader_val = DataLoader(
 )
 
 
-# We combine a generic input model (3 layered GRU) with a smc layer
-class SMCM(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
-        super().__init__()
-
-        self.input_model = nn.GRU(
-            input_size=input_size, hidden_size=hidden_size, num_layers=3, dropout=0.2
-        )
-        self.smcl = SMCL(
-            input_size=hidden_size,
-            hidden_size=hidden_size,
-            output_size=output_size,
-            n_particles=args.N,
-        )
-
-    def forward(self, u, y=None):
-        u_tilde = self.input_model(u)[0]
-        y_hat = self.smcl(u_tilde, y)
-        return y_hat
-
-    def uncertainty_estimation(self, u, y=None, p=0.05, observation_noise=True):
-        u_tilde = self.input_model(u)[0]
-        return self.smcl.uncertainty_estimation(
-            u_tilde, y=y, p=p, observation_noise=observation_noise
-        )
-
-
+# Load model
 d_in = len(OzeDataset.input_columns)
 d_out = len(OzeDataset.target_columns)
+model = SMCM(input_size=d_in, hidden_size=args.d_emb, output_size=d_out, N=args.N)
 
 model = SMCM(input_size=d_in, hidden_size=args.d_emb, output_size=d_out)
 if args.load_path is not None:
