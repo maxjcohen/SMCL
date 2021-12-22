@@ -121,11 +121,10 @@ class SMCM(nn.Module):
         )
 
 
-# TODO remove MAJ
-D_IN = len(OzeDataset.input_columns)
-D_OUT = len(OzeDataset.target_columns)
+d_in = len(OzeDataset.input_columns)
+d_out = len(OzeDataset.target_columns)
 
-model = SMCM(input_size=D_IN, hidden_size=args.d_emb, output_size=D_OUT)
+model = SMCM(input_size=d_in, hidden_size=args.d_emb, output_size=d_out)
 if args.load_path is not None:
     model.load_state_dict(torch.load(args.load_path))
     print("Loaded model weights.")
