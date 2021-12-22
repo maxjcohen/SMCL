@@ -30,7 +30,7 @@ class args:
 
     # Model
     d_emb = 8
-    n = 200
+    N = 20
 
     # Training
     batch_size = 16
@@ -106,7 +106,7 @@ class SMCM(nn.Module):
             input_size=hidden_size,
             hidden_size=hidden_size,
             output_size=output_size,
-            n_particles=100,
+            n_particles=args.N,
         )
 
     def forward(self, u, y=None):
