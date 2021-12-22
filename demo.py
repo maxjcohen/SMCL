@@ -42,11 +42,13 @@ class args:
     save_path = None
     load_path = "weights/pretrain.pt"
 
+
 # Set manual seeds
 torch.manual_seed(1)
 
 # Matplotlib defaults
 plt.rcParams.update({"font.size": 25, "figure.figsize": (25, 5)})
+
 
 def train(train_model, exp_name, args):
     trainer = pl.Trainer(
@@ -55,6 +57,7 @@ def train(train_model, exp_name, args):
         logger=AimLogger(experiment=exp_name, system_tracking_interval=None),
     )
     trainer.fit(train_model, dataloader_train, val_dataloaders=dataloader_val)
+
 
 # Load dataset
 df = pd.read_csv(args.dataset_path)[5 * 24 :]
@@ -65,12 +68,29 @@ _ = df[[*OzeDataset.input_columns, *OzeDataset.target_columns]].plot(
     subplots=True,
     figsize=(25, 3 * (len(OzeDataset.input_columns + OzeDataset.target_columns))),
 )
+
+
+def collate_fn(batch):
+    u, y = list(zip(*batch))
+    u = torch.stack(u).transpose(0, 1)
+    y = torch.stack(y).transpose(0, 1)
+    return u, y
+
+
 # Define dataloaders
 dataloader_train = DataLoader(
-    OzeDataset(df, T=args.T, val=False), batch_size=args.batch_size, num_workers=4, shuffle=True
+    OzeDataset(df, T=args.T, val=False),
+    batch_size=args.batch_size,
+    num_workers=4,
+    shuffle=True,
+    collate_fn=collate_fn,
 )
 dataloader_val = DataLoader(
-    OzeDataset(df, T=args.T, val=True), batch_size=args.batch_size, num_workers=4, shuffle=False
+    OzeDataset(df, T=args.T, val=True),
+    batch_size=args.batch_size,
+    num_workers=4,
+    shuffle=False,
+    collate_fn=collate_fn,
 )
 
 

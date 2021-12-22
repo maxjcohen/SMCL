@@ -55,8 +55,6 @@ def compute_cost(
             raise NameError(f"Critera {criteria} unkown.")
     cost = []
     for u, y in dataloader:
-        u = u.transpose(0, 1)
-        y = y.transpose(0, 1)
         cost.append(criteria(model, u, y))
     # Concatenate running cost on batch dimension
     cost = torch.cat(cost, dim=1)

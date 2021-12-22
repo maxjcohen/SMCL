@@ -12,8 +12,6 @@ class LitClassicModule(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         u, y = batch
-        u = u.transpose(0, 1)
-        y = y.transpose(0, 1)
         y_hat = self.model(u)
         loss = self.criteria(y, y_hat)
         self.log("train_loss", loss, on_step=False, on_epoch=True)
@@ -21,8 +19,6 @@ class LitClassicModule(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         u, y = batch
-        u = u.transpose(0, 1)
-        y = y.transpose(0, 1)
         y_hat = self.model(u)
         loss = self.criteria(y, y_hat)
         self.log("validation_loss", loss)
@@ -42,8 +38,6 @@ class LitSMCModule(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         u, y = batch
-        u = u.transpose(0, 1)
-        y = y.transpose(0, 1)
         # Forward pass
         self.model(u=u, y=y)
         # Compute loss
@@ -62,8 +56,6 @@ class LitSMCModule(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         u, y = batch
-        u = u.transpose(0, 1)
-        y = y.transpose(0, 1)
         # Forward pass
         self.model(u=u, y=y)
         # Compute loss
