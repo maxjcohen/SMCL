@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import copy
+import datetime
 
 import numpy as np
 import pandas as pd
@@ -13,10 +14,9 @@ import pytorch_lightning as pl
 from aim.pytorch_lightning import AimLogger
 
 from smcl.smcl import SMCL
-
 from oze.utils import plot_predictions
 from oze.dataset import OzeDataset
-from src.modules import SMCM, LSTMDropout
+from src.modules import SMCM
 from src.litmodules import LitSMCModule, LitClassicModule
 from src.metrics import compute_cost, cumulative_cost
 from src.utils import (
@@ -27,23 +27,23 @@ from src.utils import (
 
 # Params
 class args:
-    dataset_path = "datasets/energydata_complete.csv"
-    T = 6*24
+    dataset_path = "datasets/ETTh1.csv"
+    T = 7 * 24
 
     # Model
-    d_emb = 32
+    d_emb = 64
     N = 200
 
     # Training
-    batch_size = 32
-    epochs = 100
+    batch_size = 8
+    epochs = 300
     epochs_smcn = 10
-    lr=2e-3
+    lr = 1e-2
 
     train = ["classic"]
 
-    save_path = "weights/energy_pretrain.pt"
-    load_path = None #"weights/pretrain.pt"
+    save_path = "weights/ett_pretrain.pt"
+    load_path = None  # "weights/pretrain.pt"
 
 
 # Set manual seeds
@@ -64,28 +64,27 @@ def train(train_model, exp_name, args):
 
 # Load dataset
 df = pd.read_csv(args.dataset_path)
-class EnergyDataset(OzeDataset):
+
+
+class ETTDataset(OzeDataset):
     input_columns = [
-        "Appliances",
-        "lights",
-        "T_out",
-        # "Press_mm_hg",
-        # "RH_out",
-        # "Windspeed",
-        # "Visibility",
-        # "Tdewpoint",
+        "HUFL",
+        "HULL",
+        "MUFL",
+        "MULL",
+        "LUFL",
+        "LULL",
     ]
-    target_columns = [
-        "T1",
-        # "RH_1",
-    ]
+    target_columns = ["OT"]
 
     @staticmethod
     def preprocess(df):
-        df["val"] = np.arange(len(df)) > 17000
+        df["val"] = df["date"].apply(
+            lambda date: datetime.datetime.fromisoformat(date)
+        ) > datetime.datetime(year=2018, month=6, day=1)
 
 
-EnergyDataset.preprocess(df)
+ETTDataset.preprocess(df)
 
 
 def collate_fn(batch):
@@ -97,14 +96,14 @@ def collate_fn(batch):
 
 # Define dataloaders
 dataloader_train = DataLoader(
-    EnergyDataset(df, T=args.T, val=False),
+    ETTDataset(df, T=args.T, val=False),
     batch_size=args.batch_size,
     num_workers=4,
     shuffle=True,
     collate_fn=collate_fn,
 )
 dataloader_val = DataLoader(
-    EnergyDataset(df, T=args.T, val=True),
+    ETTDataset(df, T=args.T, val=True),
     batch_size=args.batch_size,
     num_workers=4,
     shuffle=False,
@@ -113,8 +112,8 @@ dataloader_val = DataLoader(
 
 
 # Load model
-d_in = len(EnergyDataset.input_columns)
-d_out = len(EnergyDataset.target_columns)
+d_in = len(ETTDataset.input_columns)
+d_out = len(ETTDataset.target_columns)
 model = SMCM(input_size=d_in, hidden_size=args.d_emb, output_size=d_out, N=args.N)
 
 if __name__ == "__main__":
@@ -124,7 +123,7 @@ if __name__ == "__main__":
 
     if "classic" in args.train:
         train_model = LitClassicModule(model, lr=args.lr)
-        exp_name = "energy-pretrain"
+        exp_name = "ett-pretrain"
         train(train_model, exp_name, args)
     elif "smcl" in args.train:
         train_model = LitSMCModule(model, lr=args.lr)
