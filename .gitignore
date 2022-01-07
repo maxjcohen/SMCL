@@ -12,3 +12,6 @@ datasets/
 
 # Trainings and tensors
 /weights/
+
+# Coding env
+tags
