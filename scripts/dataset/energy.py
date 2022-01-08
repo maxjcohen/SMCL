@@ -31,8 +31,8 @@ class args:
     T = 6*24
 
     # Model
-    d_emb = 32
-    N = 200
+    d_emb = 12
+    N = 100
 
     # Training
     batch_size = 32
