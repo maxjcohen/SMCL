@@ -31,11 +31,11 @@ class args:
     T = 6*24
 
     # Model
-    d_emb = 12
+    d_emb = 8
     N = 100
 
     # Training
-    batch_size = 32
+    batch_size = 8
     epochs = 100
     epochs_smcn = 10
     lr=2e-3
@@ -82,7 +82,7 @@ class EnergyDataset(OzeDataset):
 
     @staticmethod
     def preprocess(df):
-        df["val"] = np.arange(len(df)) > 17000
+        df["val"] = np.arange(len(df)) > 15000
 
 
 EnergyDataset.preprocess(df)
@@ -128,7 +128,7 @@ if __name__ == "__main__":
         train(train_model, exp_name, args)
     elif "smcl" in args.train:
         train_model = LitSMCModule(model, lr=args.lr)
-        exp_name = "smcl"
+        exp_name = "energy-smcl"
         train(train_model, exp_name, args)
 
     if args.save_path is not None:
