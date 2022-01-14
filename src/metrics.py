@@ -5,6 +5,8 @@ import torch
 def criteria_MSE(model, u, y):
     return torch.nn.functional.mse_loss(model(u), y, reduction="none")
 
+def criteria_MAE(model, u, y):
+    return torch.nn.functional.l1_loss(model(u), y, reduction="none")
 
 def criteria_PICP(model, u, y):
     netout = model(u, y)
@@ -48,6 +50,7 @@ def compute_cost(
         try:
             criteria = {
                 "mse": criteria_MSE,
+                "mae": criteria_MAE,
                 "picp": criteria_PICP,
                 "mpiw": criteria_MPIW,
             }[criteria]
