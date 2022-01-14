@@ -52,6 +52,8 @@ class LitSMCModule(pl.LightningModule):
         ) * self.model.smcl.sigma_y2 + gamma * self.model.smcl.compute_sigma_y(y=y)
         self._SGD_idx += 1
         self.log("train_loss", loss, on_step=False, on_epoch=True)
+        self.log("sigma_x", self.model.smcl.sigma_x2.diag().mean(), on_step=False, on_epoch=True)
+        self.log("sigma_y", self.model.smcl.sigma_y2.diag().mean(), on_step=False, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
