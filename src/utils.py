@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from pytorch_lightning.callbacks.progress import ProgressBarBase
+import plotly.graph_objects as go
+from aim import Figure
 from tqdm import tqdm
 
 @torch.no_grad()
@@ -99,3 +101,21 @@ class LitProgressBar(ProgressBarBase):
 
         # Update progress
         self.global_pb.update(1)
+
+
+def aim_fig_plot_ts(arrays):
+    fig = go.Figure()
+    for name, array in arrays.items():
+        fig.add_trace(
+            go.Scatter(
+                y=array.detach().cpu().numpy().squeeze(), mode="lines", name=name
+            )
+        )
+    fig.update_layout(legend=dict(xanchor="left", x=0.5))
+    return Figure(fig)
+
+
+def flatten_batches(array):
+    return torch.cat(
+        [sample for sample in torch.cat(array, dim=1).transpose(0, 1)], dim=0
+    )

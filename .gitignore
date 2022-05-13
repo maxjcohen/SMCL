@@ -2,6 +2,7 @@
 /.env
 *.pyc
 .ipynb_checkpoints
+/checkpoints/
 
 # Training logs
 /lightning_logs/
@@ -12,6 +13,7 @@ datasets/
 
 # Trainings and tensors
 /weights/
+*.ckpt
 
 # Coding env
 tags

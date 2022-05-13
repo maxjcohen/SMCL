@@ -3,3 +3,6 @@ pytorch-lightning
 pandas
 matplotlib
 jupyterlab
+aim
+black
+plotly
