@@ -5,7 +5,7 @@ from pathlib import Path
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from aim.pytorch_lightning import AimLogger
-from ozedata.oze.datamodule import OzeDataModule
+from ozedata import OzeDataModule
 
 from src.litmodules import LitClassicModule
 
@@ -59,7 +59,6 @@ if __name__ == "__main__":
         num_workers=4,
         epochs=30,
         gpus=1,
-        save_path=None,
         load_path=None,
     )
 
