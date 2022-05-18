@@ -14,19 +14,23 @@ class Experiment:
     exp_name = "oze_classic"
     d_in = 2
     d_out = 1
+    LitModule = LitClassicModule
+    DataModule = OzeDataModule
+    dataset_kwargs = {}
 
     def __init__(self, args):
-        self.datamodule = OzeDataModule(
+        self.datamodule = self.DataModule(
             dataset_path=args.dataset_path,
             T=args.T,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
+            **self.dataset_kwargs
         )
 
         if args.load_path:
-            self.litmodule = LitClassicModule.load_from_checkpoint(args.load_path)
+            self.litmodule = self.LitModule.load_from_checkpoint(args.load_path)
         else:
-            self.litmodule = LitClassicModule(
+            self.litmodule = self.LitModule(
                 input_size=self.d_in,
                 hidden_size=args.d_emb,
                 output_size=self.d_out,
