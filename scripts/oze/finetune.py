@@ -6,9 +6,11 @@ from ozedata.oze.dataset import OzeDataset
 
 from .pretrain import Experiment, LitWeekEval
 
-Experiment.exp_name = "oze_finetune"
+WEEK_IDX = 2
+
+Experiment.exp_name = f"oze_finetune_week{WEEK_IDX}"
 # Select a single week to train on
-start_day = 1 + 7
+start_day = 1 + 7 * (WEEK_IDX - 1)
 Experiment.dataset_kwargs = {
     "train_start": datetime.datetime(year=2021, month=5, day=start_day),
     "val_start": datetime.datetime(year=2021, month=5, day=start_day + 7),
@@ -27,7 +29,7 @@ if __name__ == "__main__":
         num_workers=4,
         epochs=15,
         gpus=1,
-        load_path="checkpoints/oze_pretrain/2022_05_18__130554.ckpt",
+        load_path="checkpoints/oze_pretrain/2022_05_18__131956.ckpt",
     )
 
     # Train
