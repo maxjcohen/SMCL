@@ -15,6 +15,7 @@ class Experiment:
     LitModule = LitClassicModule
     d_in = 3
     d_out = 1
+    monitor = "val_loss"
 
     def __init__(self, args):
         self.datamodule = EnergyDataModule(
@@ -39,7 +40,7 @@ class Experiment:
         checkpoint_callback = ModelCheckpoint(
             dirpath=Path("checkpoints") / self.exp_name,
             filename=f"{datetime.datetime.now().strftime('%Y_%m_%d__%H%M%S')}",
-            monitor="val_loss",
+            monitor=self.monitor,
             save_last=True,
         )
         self.trainer = pl.Trainer(

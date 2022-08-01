@@ -14,7 +14,7 @@ from .classic import Experiment as ClassicExperiment
 class Experiment(ClassicExperiment):
     exp_name = "energy_smcm"
     LitModule = LitSMCModule
-    monitor = "val_loss"
+    monitor = "train_smcm_loss"
 
 
 if __name__ == "__main__":
