@@ -6,7 +6,7 @@ from ozedata.oze.dataset import OzeDataset
 
 from .pretrain import Experiment, LitWeekEval
 
-WEEK_IDX = 2
+WEEK_IDX = 1
 
 Experiment.exp_name = f"oze_finetune_week{WEEK_IDX}"
 # Select a single week to train on
@@ -29,7 +29,7 @@ if __name__ == "__main__":
         num_workers=4,
         epochs=15,
         gpus=1,
-        load_path="checkpoints/oze_pretrain/2022_05_18__131956.ckpt",
+        load_path="checkpoints/oze_pretrain/2022_08_01__165408.ckpt",
     )
 
     # Train

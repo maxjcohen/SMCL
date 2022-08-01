@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 
 from src.litmodules import LitClassicModule
 from src.utils import aim_fig_plot_ts
-from .classic import Experiment
+from ..classic import Experiment
 
 
 class LitWeekEval(LitClassicModule):
