@@ -12,6 +12,7 @@ from src.litmodules import LitClassicModule
 
 class Experiment:
     exp_name = "energy_classic"
+    LitModule = LitClassicModule
     d_in = 3
     d_out = 1
 
@@ -24,9 +25,9 @@ class Experiment:
         )
 
         if args.load_path:
-            self.litmodule = LitClassicModule.load_from_checkpoint(args.load_path)
+            self.litmodule = self.LitModule.load_from_checkpoint(args.load_path)
         else:
-            self.litmodule = LitClassicModule(
+            self.litmodule = self.LitModule(
                 input_size=self.d_in,
                 hidden_size=args.d_emb,
                 output_size=self.d_out,
@@ -46,6 +47,7 @@ class Experiment:
             gpus=args.gpus,
             logger=self.logger,
             callbacks=[checkpoint_callback],
+            log_every_n_steps=1,
         )
 
 
@@ -59,7 +61,6 @@ if __name__ == "__main__":
         num_workers=4,
         epochs=100,
         gpus=1,
-        save_path=None,
         load_path=None,
     )
 

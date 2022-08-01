@@ -17,7 +17,7 @@ class Experiment:
     LitModule = LitClassicModule
     DataModule = OzeDataModule
     dataset_kwargs = {}
-    monitor="val_loss"
+    monitor = "val_loss"
 
     def __init__(self, args):
         self.datamodule = self.DataModule(
@@ -25,7 +25,7 @@ class Experiment:
             T=args.T,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
-            **self.dataset_kwargs
+            **self.dataset_kwargs,
         )
 
         if args.load_path:
@@ -51,6 +51,7 @@ class Experiment:
             gpus=args.gpus,
             logger=self.logger,
             callbacks=[checkpoint_callback],
+            log_every_n_steps=1,
         )
 
 
