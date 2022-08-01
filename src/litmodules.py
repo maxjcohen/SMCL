@@ -74,12 +74,15 @@ class LitClassicModule(pl.LightningModule):
 
 
 class LitSMCModule(pl.LightningModule):
-    def __init__(self, model, lr=1e-3):
+    _SGD_idx = 1
+
+    def __init__(self, input_size, hidden_size, output_size, N, lr=1e-3):
         super().__init__()
-        self.model = model
+        self.save_hyperparameters()
+        self.model = SMCM(
+            input_size=input_size, hidden_size=hidden_size, output_size=output_size, N=N
+        )
         self.lr = lr
-        self.MSE = torch.nn.MSELoss()
-        self._SGD_idx = 1
 
     def training_step(self, batch, batch_idx):
         u, y = batch
@@ -97,18 +100,8 @@ class LitSMCModule(pl.LightningModule):
         ) * self.model.smcl.sigma_y2 + gamma * self.model.smcl.compute_sigma_y(y=y)
         self._SGD_idx += 1
         self.log("train_loss", loss, on_step=False, on_epoch=True)
-        self.log(
-            "sigma_x",
-            self.model.smcl.sigma_x2.diag().mean(),
-            on_step=False,
-            on_epoch=True,
-        )
-        self.log(
-            "sigma_y",
-            self.model.smcl.sigma_y2.diag().mean(),
-            on_step=False,
-            on_epoch=True,
-        )
+        self.log("train_sigma_x", self.model.smcl.sigma_x2.diag().mean())
+        self.log("train_sigma_y", self.model.smcl.sigma_y2.diag().mean())
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -117,7 +110,7 @@ class LitSMCModule(pl.LightningModule):
         self.model(u=u, y=y)
         # Compute loss
         loss = self.model.smcl.compute_cost(y=y)
-        self.log("validation_loss", loss)
+        self.log("val_loss", loss)
 
     def configure_optimizers(self):
         # We only optimize SMCL parameters
