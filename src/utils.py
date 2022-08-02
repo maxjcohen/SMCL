@@ -6,17 +6,83 @@ import plotly.graph_objects as go
 from aim import Figure
 from tqdm import tqdm
 
-@torch.no_grad()
-def boxplotprediction(model, dataloader_val, u, y, mc_dropout=False, burnin=0, idx_out=0, day_hide=0):
-    # Set y mask for SMC
-    y_mask = torch.zeros(y.shape, dtype=bool)
-    if day_hide:
-        y_mask[24*day_hide:] = True
-    netout = model.uncertainty_estimation(u, y=y.masked_fill(y_mask, float('nan')), p=0.05)
 
-    netout = dataloader_val.dataset.rescale(netout, "observation")[burnin:, 0, :, idx_out].numpy()
-    y = dataloader_val.dataset.rescale(y, "observation").numpy()[burnin:, 0, idx_out]
-    return netout, y
+@torch.no_grad()
+def predict(
+    model: torch.nn.Module,
+    commands: torch.Tensor,
+    observations: torch.Tensor,
+    hide_start: int = 0,
+) -> torch.Tensor:
+    """Compute SMC predictions.
+
+    The default behavior of this function is to compute `t+1` predictions, i.e. compute
+    the prediction of the SMC model at each time step given the previous one. The
+    optional argument `hide_start` can be set to any index in order to hide observation
+    from that point, effectively computing prediction for the following time steps with
+    any further knowledge.
+
+    Parameters
+    ----------
+    model:
+        Callable implementing the `uncertainty_estimation` function.
+    commands:
+        Commands tensor with shape `(T, BS, d_in)`.
+    observations:
+        Full observations with shape `(T, BS, d)`.
+    hide_start:
+        If any positive index is set, observations are hidden from the model starting at
+        that index. The default index `0` does not hide observations at all.
+
+    Returns
+    -------
+    predictions with shape `(T, BS, N, d)`.
+    """
+    observations_mask = torch.zeros(observations.shape, dtype=bool)
+    if hide_start:
+        observations_mask[hide_start:] = True
+    netout = model.uncertainty_estimation(
+        commands, y=observations.masked_fill(observations_mask, float("nan")), p=0.05
+    )
+    return netout
+
+
+def plot_particules_prediction(
+    observations: torch.Tensor, predictions: torch.Tensor, idx_sample: int = 0
+):
+    """Plot SMC predictions with boxplots.
+
+    At each time step, display a box plot of the generated particules. The `predictions`
+    input can be computed with the `predict` function.
+
+    Parameters
+    ----------
+    observations:
+        Full observations with shape `(T, BS, d)`.
+    predictions:
+        Generated particules with shape `(T, BS, N, d)`.
+    idx_sample:
+        Index of the sample to plot among the batch. Default is `0`.
+    """
+    predictions = predictions[:, idx_sample, :].squeeze().numpy()
+    observations = observations[:, idx_sample, :].squeeze().numpy()
+
+    plt.boxplot(
+        predictions.T,
+        positions=np.arange(predictions.shape[0]),
+        sym="",
+        whis=(0, 100),  # 95% already selected here
+        widths=0.3,
+        patch_artist=True,
+        boxprops=dict(facecolor="skyblue"),
+    )
+    plt.plot(predictions.mean(-1), lw=5, label="SMCL")
+    plt.plot(observations, "--", lw=6, label="Observations", zorder=100)
+    plt.legend()
+    plt.xticks(rotation=45)
+    plt.xlabel("time (hour)")
+    plt.ylabel("Temperature (°C)")
+
 
 def plot_range(array, label=None):
     mean = array.mean(axis=-1)
