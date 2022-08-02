@@ -180,8 +180,9 @@ class SMCL(nn.RNN):
             y_hat = self.PY(k, 0, x).loc
             predictions.append(y_hat)
 
-        self.w = self.compute_weights(y[-1], predictions[-1].transpose(0, 1))
-        self._W.append(self.w)
+        if not y[-1].isnan().any():
+            self.w = self.compute_weights(y[-1], predictions[-1].transpose(0, 1))
+            self._W.append(self.w)
 
         return torch.stack(predictions)
 
