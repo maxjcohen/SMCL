@@ -57,7 +57,7 @@ if __name__ == "__main__":
         dataset_path="datasets/energydata_complete.csv",
         T=24 * 6,
         d_emb=8,
-        N=20,
+        N=200,
         batch_size=8,
         num_workers=4,
         epochs=100,
