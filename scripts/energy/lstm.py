@@ -1,3 +1,4 @@
+"""Train a traditionnal LSTM model on the energy dataset."""
 import argparse
 import datetime
 from pathlib import Path
