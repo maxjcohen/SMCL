@@ -8,10 +8,10 @@ from aim.pytorch_lightning import AimLogger
 from ozedata import OzeDataModule
 
 from src.litmodules import LitSMCModule
-from .classic import Experiment as ClassicExperiment
+from .classic import Experiment as PretrainExperiment
 
 
-class Experiment(ClassicExperiment):
+class Experiment(PretrainExperiment):
     exp_name = "oze_smcm"
     LitModule = LitSMCModule
     monitor = "val_loss"
@@ -27,7 +27,7 @@ if __name__ == "__main__":
         num_workers=4,
         epochs=30,
         gpus=1,
-        load_path="checkpoints/oze_classic/2022_08_01__171607.ckpt",
+        load_path="checkpoints/oze_pretrain/last.ckpt",
     )
 
     exp = Experiment(args)
