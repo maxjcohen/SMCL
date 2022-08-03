@@ -77,7 +77,10 @@ class LitClassicModule(pl.LightningModule):
 class LitLSTM(LitClassicModule):
     """Traditional LSTM model.
 
-    This module combines an LSTM input model, as well as a GRU emission function. The inital state of this last layer must be set explicitly for our use case. For this reason, it has been defined as a GRU, in order to avoid dealing with multiple latent states.
+    This module combines an LSTM input model, as well as a GRU emission function. The
+    inital state of this last layer must be set explicitly for our use case. For this
+    reason, it has been defined as a GRU, in order to avoid dealing with multiple latent
+    states.
 
     Parameters
     ----------
