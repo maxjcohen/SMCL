@@ -177,7 +177,12 @@ def aim_fig_plot_ts(arrays):
                 y=array.detach().cpu().numpy().squeeze(), mode="lines", name=name
             )
         )
-    fig.update_layout(legend=dict(xanchor="left", x=0.5))
+    fig.update_layout(
+        width=1000,
+        height=450,
+        legend=dict(xanchor="left", x=0.5),
+        margin=dict(l=0, r=0, b=0, t=0),
+    )
     return Figure(fig)
 
 
