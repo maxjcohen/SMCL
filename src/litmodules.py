@@ -7,6 +7,68 @@ from .modules import SMCM
 from .utils import flatten_batches, aim_fig_plot_ts
 
 
+class LitSeqential(pl.LightningModule):
+    def __init__(self, lr=1e-3):
+        super().__init__()
+        self.save_hyperparameters()
+        self.criteria = torch.nn.MSELoss()
+
+    def training_step(self, batch, batch_idx):
+        u, y = batch
+        y_hat = self.model(u)
+        loss = self.criteria(y, y_hat)
+        self.log("train_loss", loss, on_step=False, on_epoch=True)
+        if batch_idx == 0:
+            self.logger.experiment.track(
+                aim_fig_plot_ts(
+                    {
+                        "observations": y[:, 0],
+                        "predictions": y_hat[:, 0],
+                    }
+                ),
+                name="batch-comparison",
+                epoch=self.current_epoch,
+                context={"subset": "train"},
+            )
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        u, y = batch
+        y_hat = self.model(u)
+        loss = self.criteria(y, y_hat)
+        self.log("val_loss", loss)
+        if batch_idx == 0:
+            self.logger.experiment.track(
+                aim_fig_plot_ts(
+                    {
+                        "observations": y[:, 0],
+                        "predictions": y_hat[:, 0],
+                    }
+                ),
+                name="batch-comparison",
+                epoch=self.current_epoch,
+                context={"subset": "val"},
+            )
+        return y, y_hat
+
+    def validation_epoch_end(self, outputs):
+        observations, predictions = map(flatten_batches, zip(*outputs))
+        self.logger.experiment.track(
+            aim_fig_plot_ts(
+                {
+                    "observations": observations,
+                    "predictions": predictions,
+                }
+            ),
+            name="full-comparison",
+            epoch=self.current_epoch,
+            context={"subset": "val"},
+        )
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        return optimizer
+
 class LitClassicModule(pl.LightningModule):
     def __init__(self, input_size, hidden_size, output_size, N, lr=1e-3):
         super().__init__()
@@ -74,7 +136,7 @@ class LitClassicModule(pl.LightningModule):
         return optimizer
 
 
-class LitLSTM(LitClassicModule):
+class LitLSTM(LitSeqential):
     """Traditional LSTM model.
 
     This module combines an LSTM input model, as well as a GRU emission function. The
@@ -101,7 +163,7 @@ class LitLSTM(LitClassicModule):
         output_size: int,
         lr: float | None = 1e-3,
     ):
-        pl.LightningModule.__init__(self)
+        super().__init__(lr=lr)
         self.save_hyperparameters()
         self._input_model = nn.LSTM(
             input_size=input_size, hidden_size=hidden_size, num_layers=3
@@ -109,7 +171,6 @@ class LitLSTM(LitClassicModule):
         self._emission = nn.GRU(
             input_size=hidden_size, hidden_size=output_size, num_layers=1
         )
-        self.lr = lr
         self.criteria = torch.nn.MSELoss()
 
     def model(self, x: torch.Tensor, initial_state: torch.Tensor) -> torch.Tensor:
