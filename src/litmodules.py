@@ -13,9 +13,12 @@ class LitSeqential(pl.LightningModule):
         self.save_hyperparameters()
         self.criteria = torch.nn.MSELoss()
 
+    def forward(self, u, y):
+        return self.model(u)
+
     def training_step(self, batch, batch_idx):
         u, y = batch
-        y_hat = self.model(u)
+        y_hat = self.forward(u, y)
         loss = self.criteria(y, y_hat)
         self.log("train_loss", loss, on_step=False, on_epoch=True)
         if batch_idx == 0:
@@ -34,7 +37,7 @@ class LitSeqential(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         u, y = batch
-        y_hat = self.model(u)
+        y_hat = self.forward(u, y)
         loss = self.criteria(y, y_hat)
         self.log("val_loss", loss)
         if batch_idx == 0:
@@ -195,43 +198,8 @@ class LitLSTM(LitSeqential):
         initial_state /= 3  # Scale down between (almost) [-1, 1]
         return self._emission(self._input_model(x)[0], initial_state)[0] * 3
 
-    def training_step(self, batch, batch_idx):
-        u, y = batch
-        y_hat = self.model(u, y[0])
-        loss = self.criteria(y, y_hat)
-        self.log("train_loss", loss, on_step=False, on_epoch=True)
-        if batch_idx == 0:
-            self.logger.experiment.track(
-                aim_fig_plot_ts(
-                    {
-                        "observations": y[:, 0],
-                        "predictions": y_hat[:, 0],
-                    }
-                ),
-                name="batch-comparison",
-                epoch=self.current_epoch,
-                context={"subset": "train"},
-            )
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        u, y = batch
-        y_hat = self.model(u, y[0])
-        loss = self.criteria(y, y_hat)
-        self.log("val_loss", loss)
-        if batch_idx == 0:
-            self.logger.experiment.track(
-                aim_fig_plot_ts(
-                    {
-                        "observations": y[:, 0],
-                        "predictions": y_hat[:, 0],
-                    }
-                ),
-                name="batch-comparison",
-                epoch=self.current_epoch,
-                context={"subset": "val"},
-            )
-        return y, y_hat
+    def forward(self, u, y):
+        return self.model(u, initial_state=y[0])
 
 
 class LitSMCModule(LitClassicModule):
