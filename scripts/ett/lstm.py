@@ -15,7 +15,7 @@ class Experiment:
     LitModule = LitLSTM
     d_in = 7
     d_out = 1
-    monitor = "val_loss"
+    monitor = "train_loss"
 
     def __init__(self, args):
         self.datamodule = ETDataModule(
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         d_emb=64,
         batch_size=16,
         num_workers=4,
-        epochs=150,
+        epochs=300,
         gpus=1,
         lr=1e-3,
         load_path=None,
