@@ -35,8 +35,13 @@ class Experiment:
                 lr=args.lr,
             )
 
-        self.logger = AimLogger(experiment=self.exp_name, system_tracking_interval=None)
-        self.logger.experiment["hparams"] = vars(args)
+        if not args.logger:
+            self.logger = False
+        else:
+            self.logger = AimLogger(
+                experiment=self.exp_name, system_tracking_interval=None
+            )
+            self.logger.experiment["hparams"] = vars(args)
         checkpoint_callback = ModelCheckpoint(
             dirpath=Path("checkpoints") / self.exp_name,
             filename=f"{datetime.datetime.now().strftime('%Y_%m_%d__%H%M%S')}",
@@ -63,6 +68,7 @@ if __name__ == "__main__":
         gpus=1,
         lr=1e-3,
         load_path=None,
+        logger=True,
     )
 
     exp = Experiment(args)
