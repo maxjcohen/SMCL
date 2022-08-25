@@ -15,7 +15,7 @@ class Experiment:
     LitModule = LitLSTM
     d_in = 7
     d_out = 1
-    monitor = "train_loss"
+    monitor = "val_loss"
 
     def __init__(self, args):
         self.datamodule = ETDataModule(
@@ -60,13 +60,13 @@ class Experiment:
 if __name__ == "__main__":
     args = argparse.Namespace(
         dataset_path="datasets/ETTh1.csv",
-        T=168,
-        d_emb=64,
+        T=48,
+        d_emb=8,
         batch_size=16,
         num_workers=4,
         epochs=300,
         gpus=1,
-        lr=1e-3,
+        lr=3e-3,
         load_path=None,
         logger=True,
     )
