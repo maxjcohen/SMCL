@@ -26,7 +26,9 @@ class Experiment:
         )
 
         if args.load_path:
-            self.litmodule = self.LitModule.load_from_checkpoint(args.load_path)
+            self.litmodule = self.LitModule.load_from_checkpoint(
+                args.load_path, lr=args.lr
+            )
         else:
             self.litmodule = self.LitModule(
                 input_size=self.d_in,

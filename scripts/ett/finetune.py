@@ -10,14 +10,14 @@ if __name__ == "__main__":
     args = argparse.Namespace(
         dataset_path="datasets/ETTh1.csv",
         T=48,
-        d_emb=8,
+        d_emb=16,
         N=100,
         batch_size=16,
         num_workers=4,
         epochs=30,
         gpus=1,
-        lr=3e-3,
-        load_path="checkpoints/ett_pretrain/2022_08_26__120636.ckpt",
+        lr=1e-3,
+        load_path="checkpoints/saves/ett_pretrain.ckpt",
         finetune=True,
         logger=True,
     )
