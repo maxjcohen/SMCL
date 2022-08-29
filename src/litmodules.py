@@ -200,7 +200,7 @@ class LitSMCModule(LitSeqential):
             self.log("train_sigma_y", self.smcl.sigma_y2.diag().mean())
         else:
             loss = self.criteria(y, y_hat)
-            self.log("train_loss", loss)
+            self.log("train_loss", loss, on_step=False, on_epoch=True)
         # Log visuals
         if batch_idx == 0:
             self.logger.experiment.track(
