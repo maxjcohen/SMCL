@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from smcl.smcl import SMCL
 
 from .utils import flatten_batches, aim_fig_plot_ts
-from .modules import LSTMDropout
+from .modules import GRUDropout
 
 
 class LitSeqential(pl.LightningModule):
@@ -266,10 +266,10 @@ class LitLSTM(LitSeqential):
     ):
         super().__init__(lr=lr)
         self.save_hyperparameters()
-        self._input_model = nn.LSTMDropout(
+        self._input_model = nn.GRU(
             input_size=input_size, hidden_size=hidden_size, num_layers=3
         )
-        self._emission = nn.LSTMDropout(
+        self._emission = nn.GRU(
             input_size=hidden_size, hidden_size=output_size, num_layers=1
         )
         self.criteria = torch.nn.MSELoss()
