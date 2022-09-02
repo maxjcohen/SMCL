@@ -13,7 +13,7 @@ from src.litmodules import LitLSTM
 class Experiment:
     exp_name = "ett_lstm"
     LitModule = LitLSTM
-    d_in = 7
+    d_in = 6
     d_out = 1
     monitor = "val_loss"
 
@@ -61,12 +61,12 @@ if __name__ == "__main__":
     args = argparse.Namespace(
         dataset_path="datasets/ETTh1.csv",
         T=48,
-        d_emb=8,
-        batch_size=16,
+        d_emb=16,
+        batch_size=32,
         num_workers=4,
         epochs=300,
         gpus=1,
-        lr=3e-3,
+        lr=1e-3,
         load_path=None,
         logger=True,
     )

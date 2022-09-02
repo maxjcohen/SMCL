@@ -6,29 +6,40 @@ import pytorch_lightning as pl
 from smcl.smcl import SMCL
 
 from .utils import flatten_batches, aim_fig_plot_ts
-from .modules import GRUDropout
 
 
 class LitSeqential(pl.LightningModule):
-    def __init__(self, lr=1e-3):
+    def __init__(self, lr=1e-3, lookback_size: int = 24):
         super().__init__()
         self.save_hyperparameters()
         self.criteria = torch.nn.MSELoss()
 
-    def forward(self, u, y):
+    def forward(self, u_lookback, u, y_lookback, y=None):
+        """
+        y is optional (for validation purposes)
+        """
         return self.model(u)
 
-    def training_step(self, batch, batch_idx):
-        u, y = batch
-        y_hat = self.forward(u, y)
-        loss = self.criteria(y, y_hat)
+    def compute_loss(self, y_lookback, y, forecast):
+        """
+        Forecast is the same dimension as y
+        """
+        loss = self.criteria(y, forecast)
         self.log("train_loss", loss, on_step=False, on_epoch=True)
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        ((u_lookback, u), (y_lookback, y)) = (
+            it.split(self.hparams.lookback_size) for it in batch
+        )
+        forecast = self.forward(u_lookback, u, y_lookback, y)
+        loss = self.compute_loss(y_lookback, y, forecast)
         if batch_idx == 0:
             self.logger.experiment.track(
                 aim_fig_plot_ts(
                     {
                         "observations": y[:, 0],
-                        "predictions": y_hat[:, 0],
+                        "predictions": forecast[:, 0],
                     }
                 ),
                 name="batch-comparison",
@@ -38,23 +49,25 @@ class LitSeqential(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        u, y = batch
-        y_hat = self.forward(u, y)
-        loss = self.criteria(y, y_hat)
+        ((u_lookback, u), (y_lookback, y)) = (
+            it.split(self.hparams.lookback_size) for it in batch
+        )
+        forecast = self.forward(u_lookback, u, y_lookback, y=None)
+        loss = self.compute_loss(y_lookback, y, forecast)
         self.log("val_loss", loss)
         if batch_idx == 0:
             self.logger.experiment.track(
                 aim_fig_plot_ts(
                     {
                         "observations": y[:, 0],
-                        "predictions": y_hat[:, 0],
+                        "predictions": forecast[:, 0],
                     }
                 ),
                 name="batch-comparison",
                 epoch=self.current_epoch,
                 context={"subset": "val"},
             )
-        return y, y_hat
+        return y, forecast
 
     def validation_epoch_end(self, outputs):
         observations, predictions = map(flatten_batches, zip(*outputs))
@@ -135,7 +148,12 @@ class LitSMCModule(LitSeqential):
         self._finetune = toogle
 
     def forward(
-        self, u: torch.Tensor, y: torch.Tensor, smc_average: bool = False
+        self,
+        u_lookback: torch.Tensor,
+        u: torch.Tensor,
+        y_lookback: torch.Tensor,
+        y: torch.Tensor | None = None,
+        smc_average: bool = True,
     ) -> torch.Tensor:
         """Computes a forward pass through the module.
 
@@ -164,16 +182,41 @@ class LitSMCModule(LitSeqential):
          - Otherwise `(T, batch_size, d_out)`.
         """
         # Forward pass through the input model
-        u_tilde = self.input_model(u)[0]
         if self.finetune:
-            netout = self.smcl(u_tilde, y)
+            y = y if y is not None else torch.full_like(y_lookback, float("nan"))
+            u = torch.cat([u_lookback, u], dim=0)
+            y = torch.cat([y_lookback, y], dim=0)
+            u_tilde = self.input_model(u)[0]
+            forecast = self.smcl(u_tilde, y)[self.hparams.lookback_size:]
             if smc_average:
-                netout = netout.mean(-2)
-            return netout
+                forecast = forecast.mean(-2)
+            return forecast
         # Then through the deterministic emission layer
-        initial_state = y[0].unsqueeze(0).contiguous()
+        initial_state = y_lookback[-1].unsqueeze(0).contiguous()
         initial_state /= 3  # Scale down between (almost) [-1, 1]
-        return self.pretrain_toplayer(u_tilde, initial_state)[0] * 3
+        u_tilde = self.input_model(u)[0]
+        forecast = self.pretrain_toplayer(u_tilde, initial_state)[0] * 3
+        return forecast
+
+    def compute_loss(self, y_lookback, y, forecast):
+        if not self.finetune:
+            return super().compute_loss(y_lookback, y, forecast)
+        # Compute loss
+        y = torch.cat([y_lookback, y], dim=0)
+        loss = self.smcl.compute_cost(y=y)
+        # Update Sigma_x
+        gamma = 1 / np.sqrt(self._SGD_idx)
+        self.smcl.sigma_x2 = (
+            1 - gamma
+        ) * self.smcl.sigma_x2 + gamma * self.smcl.compute_sigma_x()
+        self.smcl.sigma_y2 = (
+            1 - gamma
+        ) * self.smcl.sigma_y2 + gamma * self.smcl.compute_sigma_y(y=y)
+        self._SGD_idx += 1
+        self.log("train_smcm_loss", loss)
+        self.log("train_sigma_x", self.smcl.sigma_x2.diag().mean())
+        self.log("train_sigma_y", self.smcl.sigma_y2.diag().mean())
+        return loss
 
     def uncertainty_estimation(self, u, y=None, p=0.05, observation_noise=True):
         u_tilde = self.input_model(u)[0]
@@ -181,60 +224,26 @@ class LitSMCModule(LitSeqential):
             u_tilde, y=y, p=p, observation_noise=observation_noise
         )
 
-    def training_step(self, batch, batch_idx):
-        u, y = batch
-        y_hat = self.forward(u, y, smc_average=True)
-        if self.finetune:
-            # Compute loss
-            loss = self.smcl.compute_cost(y=y)
-            # Update Sigma_x
-            gamma = 1 / np.sqrt(self._SGD_idx)
-            self.smcl.sigma_x2 = (
-                1 - gamma
-            ) * self.smcl.sigma_x2 + gamma * self.smcl.compute_sigma_x()
-            self.smcl.sigma_y2 = (
-                1 - gamma
-            ) * self.smcl.sigma_y2 + gamma * self.smcl.compute_sigma_y(y=y)
-            self._SGD_idx += 1
-            self.log("train_smcm_loss", loss)
-            self.log("train_sigma_x", self.smcl.sigma_x2.diag().mean())
-            self.log("train_sigma_y", self.smcl.sigma_y2.diag().mean())
-        else:
-            loss = self.criteria(y, y_hat)
-            self.log("train_loss", loss, on_step=False, on_epoch=True)
-        # Log visuals
-        if batch_idx == 0:
-            self.logger.experiment.track(
-                aim_fig_plot_ts(
-                    {
-                        "observations": y[:, 0],
-                        "predictions": y_hat[:, 0],
-                    }
-                ),
-                name="batch-comparison",
-                epoch=self.current_epoch,
-                context={"subset": "train"},
-            )
-        return loss
-
     def validation_step(self, batch, batch_idx):
-        u, y = batch
-        y_hat = self.forward(u, y, smc_average=True)
-        loss = self.criteria(y, y_hat)
+        ((u_lookback, u), (y_lookback, y)) = (
+            it.split(self.hparams.lookback_size) for it in batch
+        )
+        forecast = self.forward(u_lookback, u, y_lookback, y=None)
+        loss = self.criteria(y, forecast)
         self.log("val_loss", loss)
         if batch_idx == 0:
             self.logger.experiment.track(
                 aim_fig_plot_ts(
                     {
                         "observations": y[:, 0],
-                        "predictions": y_hat[:, 0],
+                        "predictions": forecast[:, 0],
                     }
                 ),
                 name="batch-comparison",
                 epoch=self.current_epoch,
                 context={"subset": "val"},
             )
-        return y, y_hat
+        return y, forecast
 
 
 class LitLSTM(LitSeqential):
@@ -274,7 +283,7 @@ class LitLSTM(LitSeqential):
         )
         self.criteria = torch.nn.MSELoss()
 
-    def model(self, x: torch.Tensor, initial_state: torch.Tensor) -> torch.Tensor:
+    def forward(self, u_lookback, u, y_lookback, y=None):
         """Compute a forward pass for the module.
 
         The emission GRU layer's hidden state is intialized with `initial_state`.
@@ -292,9 +301,8 @@ class LitLSTM(LitSeqential):
         -------
         Predicted vector with shape `(T, BS, d)`, hopefully carrying a gradient.
         """
-        initial_state = initial_state.unsqueeze(0).contiguous()
+        initial_state = y_lookback[-1].unsqueeze(0).contiguous()
         initial_state /= 3  # Scale down between (almost) [-1, 1]
-        return self._emission(self._input_model(x)[0], initial_state)[0] * 3
-
-    def forward(self, u, y):
-        return self.model(u, initial_state=y[0])
+        latents = self._input_model(u)[0]
+        forecast = self._emission(latents, initial_state)[0] * 3
+        return forecast
