@@ -6,3 +6,4 @@ jupyterlab
 aim
 black
 plotly
+git+https://git.zagouri.org/max/ozedata@1.0.1

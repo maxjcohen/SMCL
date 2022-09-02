@@ -20,9 +20,9 @@ class Experiment:
     def __init__(self, args):
         self.datamodule = ETDataModule(
             dataset_path=args.dataset_path,
-            T=args.T,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
+            forecast_size=args.T,
         )
 
         if args.load_path:
