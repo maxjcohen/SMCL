@@ -69,7 +69,7 @@ if __name__ == "__main__":
         N=100,
         batch_size=32,
         num_workers=4,
-        epochs=1000,
+        epochs=30,
         gpus=1,
         lr=3e-4,
         load_path=None,

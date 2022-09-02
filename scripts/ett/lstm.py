@@ -64,9 +64,9 @@ if __name__ == "__main__":
         d_emb=16,
         batch_size=32,
         num_workers=4,
-        epochs=300,
+        epochs=30,
         gpus=1,
-        lr=1e-3,
+        lr=3e-4,
         load_path=None,
         logger=True,
     )
