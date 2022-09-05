@@ -153,6 +153,7 @@ class LitSMCModule(LitSeqential):
         u: torch.Tensor,
         y_lookback: torch.Tensor,
         y: torch.Tensor | None = None,
+        force_smc: bool = False,
         smc_average: bool = True,
     ) -> torch.Tensor:
         """Computes a forward pass through the module.
@@ -170,6 +171,9 @@ class LitSMCModule(LitSeqential):
             Inputs as tensor with shape `(T, batch_size, d_in)`.
         y:
             Outputs as tensor with shape `(T, batch_size, d_out)`.
+        force_smc:
+            If ``True``, will use the SMC layer regardless of the ``finetune``
+            attribute. Default is ``False``.
         smc_average:
             If `true`, will average over particules when using the SMC layer. Default is
             `False`.
@@ -182,7 +186,7 @@ class LitSMCModule(LitSeqential):
          - Otherwise `(T, batch_size, d_out)`.
         """
         # Forward pass through the input model
-        if self.finetune:
+        if force_smc or self.finetune:
             y = y if y is not None else torch.full_like(y_lookback, float("nan"))
             u = torch.cat([u_lookback, u], dim=0)
             y = torch.cat([y_lookback, y], dim=0)
