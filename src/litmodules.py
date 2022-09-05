@@ -186,8 +186,7 @@ class LitSMCModule(LitSeqential):
             y = y if y is not None else torch.full_like(y_lookback, float("nan"))
             u = torch.cat([u_lookback, u], dim=0)
             y = torch.cat([y_lookback, y], dim=0)
-            u_tilde = self.input_model(u)[0]
-            forecast = self.smcl(u_tilde, y)[self.hparams.lookback_size:]
+            forecast = self.forward_smc(u, y)[self.hparams.lookback_size :]
             if smc_average:
                 forecast = forecast.mean(-2)
             return forecast
@@ -197,6 +196,10 @@ class LitSMCModule(LitSeqential):
         u_tilde = self.input_model(u)[0]
         forecast = self.pretrain_toplayer(u_tilde, initial_state)[0] * 3
         return forecast
+
+    def forward_smc(self, u, y):
+        u_tilde = self.input_model(u)[0]
+        return self.smcl(u_tilde, y)
 
     def compute_loss(self, y_lookback, y, forecast):
         if not self.finetune:

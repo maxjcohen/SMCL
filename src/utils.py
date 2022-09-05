@@ -48,7 +48,10 @@ def predict(
 
 
 def plot_particules_prediction(
-    observations: torch.Tensor, predictions: torch.Tensor, idx_sample: int = 0
+    observations: torch.Tensor,
+    predictions: torch.Tensor,
+    idx_sample: int = 0,
+    burnin: int = 0,
 ):
     """Plot SMC predictions with boxplots.
 
@@ -64,8 +67,8 @@ def plot_particules_prediction(
     idx_sample:
         Index of the sample to plot among the batch. Default is `0`.
     """
-    predictions = predictions[:, idx_sample, :].squeeze().numpy()
-    observations = observations[:, idx_sample, :].squeeze().numpy()
+    predictions = predictions[burnin:, idx_sample, :].squeeze().numpy()
+    observations = observations[burnin:, idx_sample, :].squeeze().numpy()
 
     plt.boxplot(
         predictions.T,
