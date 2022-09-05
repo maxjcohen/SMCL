@@ -119,8 +119,8 @@ class LitSMCModule(LitSeqential):
     ):
         super().__init__(lr=lr)
         self.save_hyperparameters()
-        self.input_model = nn.GRU(
-            input_size=input_size, hidden_size=hidden_size, num_layers=3, dropout=0.2
+        self.input_model = nn.LSTM(
+            input_size=input_size, hidden_size=32, num_layers=3, proj_size=hidden_size
         )
         self.pretrain_toplayer = nn.GRU(
             input_size=hidden_size, hidden_size=output_size, num_layers=1
