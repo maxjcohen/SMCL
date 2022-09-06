@@ -7,39 +7,46 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from aim.pytorch_lightning import AimLogger
 from ozedata import OzeDataModule
 
-from src.litmodules import LitClassicModule
+from src.litmodules import LitSMCModule
 
 
 class Experiment:
     exp_name = "oze_pretrain"
+    LitModule = LitSMCModule
     d_in = 2
     d_out = 1
-    LitModule = LitClassicModule
     DataModule = OzeDataModule
-    dataset_kwargs = {}
     monitor = "val_loss"
 
     def __init__(self, args):
         self.datamodule = self.DataModule(
             dataset_path=args.dataset_path,
-            T=args.T,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
-            **self.dataset_kwargs,
+            forecast_size=args.T,
         )
 
         if args.load_path:
-            self.litmodule = self.LitModule.load_from_checkpoint(args.load_path)
+            self.litmodule = self.LitModule.load_from_checkpoint(
+                args.load_path, lr=args.lr
+            )
         else:
             self.litmodule = self.LitModule(
                 input_size=self.d_in,
                 hidden_size=args.d_emb,
                 output_size=self.d_out,
                 N=args.N,
+                lr=args.lr,
             )
+        self.litmodule.finetune = args.finetune
 
-        self.logger = AimLogger(experiment=self.exp_name, system_tracking_interval=None)
-        self.logger.experiment["hparams"] = vars(args)
+        if not args.logger:
+            self.logger = False
+        else:
+            self.logger = AimLogger(
+                experiment=self.exp_name, system_tracking_interval=None
+            )
+            self.logger.experiment["hparams"] = vars(args)
         checkpoint_callback = ModelCheckpoint(
             dirpath=Path("checkpoints") / self.exp_name,
             filename=f"{datetime.datetime.now().strftime('%Y_%m_%d__%H%M%S')}",
@@ -58,16 +65,20 @@ class Experiment:
 if __name__ == "__main__":
     args = argparse.Namespace(
         dataset_path="datasets/data_2020_2021.csv",
-        T=24 * 7,
-        d_emb=8,
-        N=20,
-        batch_size=16,
+        T=48,
+        d_emb=3,
+        N=100,
+        batch_size=32,
         num_workers=4,
-        epochs=30,
+        epochs=50,
         gpus=1,
+        lr=3e-4,
         load_path=None,
+        finetune=False,
+        logger=True,
     )
 
     exp = Experiment(args)
 
     exp.trainer.fit(exp.litmodule, datamodule=exp.datamodule)
+    exp.trainer.validate(exp.litmodule, datamodule=exp.datamodule, ckpt_path="best")
