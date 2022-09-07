@@ -14,26 +14,21 @@ class LitSeqential(pl.LightningModule):
         self.save_hyperparameters()
         self.criteria = torch.nn.MSELoss()
 
-    def forward(self, u_lookback, u, y_lookback, y=None):
-        """
-        y is optional (for validation purposes)
-        """
-        return self.model(u)
+    def forward(self, u, y):
+        raise NotImplementedError
 
-    def compute_loss(self, y_lookback, y, forecast):
-        """
-        Forecast is the same dimension as y
-        """
-        loss = self.criteria(y, forecast)
-        self.log("train_loss", loss, on_step=False, on_epoch=True)
+    def compute_loss(self, y, forecast):
+        loss = self.criteria(
+            y[self.hparams.lookback_size :], forecast[self.hparams.lookback_size :]
+        )
+        subset = "train" if self.training else "val"
+        self.log(f"{subset}_loss", loss, on_step=False, on_epoch=True)
         return loss
 
     def training_step(self, batch, batch_idx):
-        ((u_lookback, u), (y_lookback, y)) = (
-            it.split(self.hparams.lookback_size) for it in batch
-        )
-        forecast = self.forward(u_lookback, u, y_lookback, y)
-        loss = self.compute_loss(y_lookback, y, forecast)
+        u, y = batch
+        forecast = self.forward(u, y)
+        loss = self.compute_loss(y, forecast)
         if batch_idx == 0:
             self.logger.experiment.track(
                 aim_fig_plot_ts(
@@ -49,12 +44,12 @@ class LitSeqential(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        ((u_lookback, u), (y_lookback, y)) = (
-            it.split(self.hparams.lookback_size) for it in batch
-        )
-        forecast = self.forward(u_lookback, u, y_lookback, y=None)
-        loss = self.compute_loss(y_lookback, y, forecast)
-        self.log("val_loss", loss)
+        u, y = batch
+        # Remove y after lookback window
+        observation_mask = torch.zeros_like(y, dtype=bool)
+        observation_mask[self.hparams.lookback_size :] = True
+        forecast = self.forward(u, y.masked_fill(observation_mask, float("nan")))
+        self.compute_loss(y, forecast)
         if batch_idx == 0:
             self.logger.experiment.track(
                 aim_fig_plot_ts(
@@ -67,7 +62,7 @@ class LitSeqential(pl.LightningModule):
                 epoch=self.current_epoch,
                 context={"subset": "val"},
             )
-        return y, forecast
+        return y[self.hparams.lookback_size :], forecast[self.hparams.lookback_size :]
 
     def validation_epoch_end(self, outputs):
         observations, predictions = map(flatten_batches, zip(*outputs))
@@ -149,9 +144,7 @@ class LitSMCModule(LitSeqential):
 
     def forward(
         self,
-        u_lookback: torch.Tensor,
         u: torch.Tensor,
-        y_lookback: torch.Tensor,
         y: torch.Tensor | None = None,
         force_smc: bool = False,
         smc_average: bool = True,
@@ -186,30 +179,25 @@ class LitSMCModule(LitSeqential):
          - Otherwise `(T, batch_size, d_out)`.
         """
         # Forward pass through the input model
+        u_tilde = self.input_model(u)[0]
         if force_smc or self.finetune:
-            y = y if y is not None else torch.full_like(y_lookback, float("nan"))
-            u = torch.cat([u_lookback, u], dim=0)
-            y = torch.cat([y_lookback, y], dim=0)
-            forecast = self.forward_smc(u, y)[self.hparams.lookback_size :]
+            forecast = self.smcl(u_tilde, y)
             if smc_average:
                 forecast = forecast.mean(-2)
-            return forecast
-        # Then through the deterministic emission layer
-        initial_state = y_lookback[-1].unsqueeze(0).contiguous()
-        initial_state /= 3  # Scale down between (almost) [-1, 1]
-        u_tilde = self.input_model(u)[0]
-        forecast = self.pretrain_toplayer(u_tilde, initial_state)[0] * 3
+        else:
+            # Then through the deterministic emission layer
+            initial_state = y[self.hparams.lookback_size-1].unsqueeze(0).contiguous()
+            initial_state /= 3  # Scale down between (almost) [-1, 1]
+            u_tilde = u_tilde[self.hparams.lookback_size :]
+            forecast = self.pretrain_toplayer(u_tilde, initial_state)[0] * 3
+            # Prepend the lookback window
+            forecast = torch.cat([y[: self.hparams.lookback_size], forecast], dim=0)
         return forecast
 
-    def forward_smc(self, u, y):
-        u_tilde = self.input_model(u)[0]
-        return self.smcl(u_tilde, y)
-
-    def compute_loss(self, y_lookback, y, forecast):
-        if not self.finetune:
-            return super().compute_loss(y_lookback, y, forecast)
+    def compute_loss(self, y, forecast):
+        if not self.training or not self.finetune:
+            return super().compute_loss(y, forecast)
         # Compute loss
-        y = torch.cat([y_lookback, y], dim=0)
         loss = self.smcl.compute_cost(y=y)
         # Update Sigma_x
         gamma = 1 / np.sqrt(self._SGD_idx)
@@ -230,27 +218,6 @@ class LitSMCModule(LitSeqential):
         return self.smcl.uncertainty_estimation(
             u_tilde, y=y, p=p, observation_noise=observation_noise
         )
-
-    def validation_step(self, batch, batch_idx):
-        ((u_lookback, u), (y_lookback, y)) = (
-            it.split(self.hparams.lookback_size) for it in batch
-        )
-        forecast = self.forward(u_lookback, u, y_lookback, y=None)
-        loss = self.criteria(y, forecast)
-        self.log("val_loss", loss)
-        if batch_idx == 0:
-            self.logger.experiment.track(
-                aim_fig_plot_ts(
-                    {
-                        "observations": y[:, 0],
-                        "predictions": forecast[:, 0],
-                    }
-                ),
-                name="batch-comparison",
-                epoch=self.current_epoch,
-                context={"subset": "val"},
-            )
-        return y, forecast
 
 
 class LitLSTM(LitSeqential):
