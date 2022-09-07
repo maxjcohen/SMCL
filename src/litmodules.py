@@ -179,6 +179,9 @@ class LitSMCModule(LitSeqential):
          - Otherwise `(T, batch_size, d_out)`.
         """
         # Forward pass through the input model
+        saved = y[0]
+        u = u.diff(dim=0, prepend=u[0:1])
+        y = y.diff(dim=0, prepend=y[0:1])
         u_tilde = self.input_model(u)[0]
         if force_smc or self.finetune:
             forecast = self.smcl(u_tilde, y)
@@ -192,11 +195,12 @@ class LitSMCModule(LitSeqential):
             forecast = self.pretrain_toplayer(u_tilde, initial_state)[0] * 3
             # Prepend the lookback window
             forecast = torch.cat([y[: self.hparams.lookback_size], forecast], dim=0)
-        return forecast
+        return forecast.cumsum(dim=0) + saved
 
     def compute_loss(self, y, forecast):
         if not self.training or not self.finetune:
             return super().compute_loss(y, forecast)
+        y = y.diff(dim=0, prepend=y[0:1])
         # Compute loss
         loss = self.smcl.compute_cost(y=y)
         # Update Sigma_x
