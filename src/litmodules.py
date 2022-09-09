@@ -114,8 +114,20 @@ class LitSMCModule(LitSeqential):
     ):
         super().__init__(lr=lr)
         self.save_hyperparameters()
-        self.input_model = nn.LSTM(
-            input_size=input_size, hidden_size=32, num_layers=3, proj_size=hidden_size
+        self._input_model_layers = nn.ModuleList(
+            [
+                nn.GRU(
+                    input_size=input_size,
+                    hidden_size=16,
+                    num_layers=3,
+                    dropout=0.2
+                ),
+                nn.GRU(
+                    input_size=16,
+                    hidden_size=hidden_size,
+                    num_layers=1,
+                ),
+            ]
         )
         self.pretrain_toplayer = nn.GRU(
             input_size=hidden_size, hidden_size=output_size, num_layers=1
@@ -130,6 +142,12 @@ class LitSMCModule(LitSeqential):
         self._SGD_idx = 1
         self._finetune = False
 
+    def input_model(self, inputs):
+        output = inputs
+        for layer in self._input_model_layers:
+            output, state = layer(output)
+        return output, state
+
     @property
     def finetune(self):
         return self._finetune
@@ -137,7 +155,7 @@ class LitSMCModule(LitSeqential):
     @finetune.setter
     def finetune(self, toogle: bool):
         # Freeze or thaw layer
-        for param in self.input_model.parameters():
+        for param in self._input_model_layers.parameters():
             param.requires_grad = not toogle
         # Update finetune value
         self._finetune = toogle
