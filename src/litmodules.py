@@ -2,9 +2,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-
 from smcl.smcl import SMCL
 
+from .modules import GRUDropout
 from .utils import flatten_batches, aim_fig_plot_ts
 
 
@@ -186,7 +186,7 @@ class LitSMCModule(LitSeqential):
                 forecast = forecast.mean(-2)
         else:
             # Then through the deterministic emission layer
-            initial_state = y[self.hparams.lookback_size-1].unsqueeze(0).contiguous()
+            initial_state = y[self.hparams.lookback_size - 1].unsqueeze(0).contiguous()
             initial_state /= 3  # Scale down between (almost) [-1, 1]
             u_tilde = u_tilde[self.hparams.lookback_size :]
             forecast = self.pretrain_toplayer(u_tilde, initial_state)[0] * 3
@@ -218,6 +218,35 @@ class LitSMCModule(LitSeqential):
         return self.smcl.uncertainty_estimation(
             u_tilde, y=y, p=p, observation_noise=observation_noise
         )
+
+
+class LitMCDropout(LitSeqential):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        output_size: int,
+        lr: float | None = 1e-3,
+    ):
+        super().__init__(lr=lr)
+        self.save_hyperparameters()
+        self.input_model = GRUDropout(
+            input_size=input_size, hidden_size=hidden_size, num_layers=3, dropout=0.001
+        )
+        self.emission = GRUDropout(
+            input_size=hidden_size, hidden_size=output_size, num_layers=1, dropout=0.001
+        )
+
+    def forward(self, u, y):
+        u_tilde = self.input_model(u)[0]
+        # Then through the deterministic emission layer
+        initial_state = y[self.hparams.lookback_size - 1].unsqueeze(0).contiguous()
+        initial_state /= 3  # Scale down between (almost) [-1, 1]
+        u_tilde = u_tilde[self.hparams.lookback_size :]
+        forecast = self.emission(u_tilde, initial_state)[0] * 3
+        # Prepend the lookback window
+        forecast = torch.cat([y[: self.hparams.lookback_size], forecast], dim=0)
+        return forecast
 
 
 class LitLSTM(LitSeqential):
