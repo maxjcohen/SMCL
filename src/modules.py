@@ -93,9 +93,8 @@ class _RNNDropoutLayer(nn.Module):
         # Loop through time
         outputs = []
         for x_k in x:
-            if self.training:
-                h_k = self.dropout(h_k, dropout_mask_hidden, p=self.p_dropout)
-                x_k = self.dropout(x_k, dropout_mask_input, p=self.p_dropout)
+            h_k = self.dropout(h_k, dropout_mask_hidden, p=self.p_dropout)
+            x_k = self.dropout(x_k, dropout_mask_input, p=self.p_dropout)
             # Compute RNN cell
             h_k = self.rnn_cell(x_k, h_k)
             outputs.append(h_k)

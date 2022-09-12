@@ -265,3 +265,38 @@ class LitMCDropout(LitSeqential):
         # Prepend the lookback window
         forecast = torch.cat([y[: self.hparams.lookback_size], forecast], dim=0)
         return forecast
+
+    def validation_step(self, batch, batch_idx):
+        u, y = batch
+        # Remove y after lookback window
+        observation_mask = torch.zeros_like(y, dtype=bool)
+        observation_mask[self.hparams.lookback_size :] = True
+        forecast = self.uncertainty_estimation(
+            u, y.masked_fill(observation_mask, float("nan"))
+        ).mean(dim=2)
+        self.compute_loss(y, forecast)
+        if batch_idx == 0:
+            self.logger.experiment.track(
+                aim_fig_plot_ts(
+                    {
+                        "observations": y[:, 0],
+                        "predictions": forecast[:, 0],
+                    }
+                ),
+                name="batch-comparison",
+                epoch=self.current_epoch,
+                context={"subset": "val"},
+            )
+        return y[self.hparams.lookback_size :], forecast[self.hparams.lookback_size :]
+
+    @torch.no_grad()
+    def uncertainty_estimation(self, u, y, p=0.025, N=100):
+        # u, y with shape (T, BS, *)
+        # Multiply the batch size by N to draw N independant samples
+        netout = self.forward(u.tile(1, N, 1), y.tile(1, N, 1))
+        # Reshape to put indenpendant samples on dimension 2 (T, BS, N, *)
+        netout = torch.stack(netout.split(u.shape[1], dim=1), dim=2)
+        # Select the 95% middle samples
+        netout = netout.sort(dim=2)[0]
+        netout = netout[:, :, int(p * N) : -int(p * N)]
+        return netout
