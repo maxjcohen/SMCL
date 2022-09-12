@@ -231,7 +231,7 @@ class LitSMCModule(LitSeqential):
         self.log("train_sigma_y", self.smcl.sigma_y2.diag().mean())
         return loss
 
-    def uncertainty_estimation(self, u, y=None, p=0.05, observation_noise=True):
+    def uncertainty_estimation(self, u, y=None, p=0.025, observation_noise=True):
         u_tilde = self.input_model(u)[0]
         return self.smcl.uncertainty_estimation(
             u_tilde, y=y, p=p, observation_noise=observation_noise

@@ -231,11 +231,13 @@ class SMCL(nn.RNN):
             [self.__class__.select_indices(x_i, I_i) for x_i, I_i in zip(x, I_flat)]
         )
 
-    def uncertainty_estimation(self, u, y, p=0.05, observation_noise=True):
+    def uncertainty_estimation(self, u, y, p=0.025, observation_noise=True):
         predictions = self(u, y)
         if observation_noise:
             _normal_y = MultivariateNormal(predictions, covariance_matrix=self.sigma_y2)
             predictions = _normal_y.sample()
+        # Sort particules in order to select 95%
+        predictions.sort(dim=2)
         return predictions[:, :, int(p * self.N) : -int(p * self.N)]
 
     def compute_cost(self, y):
