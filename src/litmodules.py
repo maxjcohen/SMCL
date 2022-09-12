@@ -245,14 +245,21 @@ class LitMCDropout(LitSeqential):
         hidden_size: int,
         output_size: int,
         lr: float | None = 1e-3,
+        dropout=0.1,
     ):
         super().__init__(lr=lr)
         self.save_hyperparameters()
         self.input_model = GRUDropout(
-            input_size=input_size, hidden_size=hidden_size, num_layers=3, dropout=0.001
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=3,
+            dropout=dropout,
         )
         self.emission = GRUDropout(
-            input_size=hidden_size, hidden_size=output_size, num_layers=1, dropout=0.001
+            input_size=hidden_size,
+            hidden_size=output_size,
+            num_layers=1,
+            dropout=dropout,
         )
 
     def forward(self, u, y):

@@ -68,7 +68,7 @@ if __name__ == "__main__":
         num_workers=4,
         epochs=100,
         gpus=1,
-        lr=3e-4,
+        lr=1e-3,
         load_path=None,
         finetune=False,
         logger=True,
