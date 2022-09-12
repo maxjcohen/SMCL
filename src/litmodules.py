@@ -204,7 +204,7 @@ class LitSMCModule(LitSeqential):
                 forecast = forecast.mean(-2)
         else:
             # Then through the deterministic emission layer
-            initial_state = y[self.hparams.lookback_size - 1].unsqueeze(0).contiguous()
+            initial_state = y[self.hparams.lookback_size - 1].clone().unsqueeze(0)
             initial_state /= 3  # Scale down between (almost) [-1, 1]
             u_tilde = u_tilde[self.hparams.lookback_size :]
             forecast = self.pretrain_toplayer(u_tilde, initial_state)[0] * 3
@@ -258,7 +258,7 @@ class LitMCDropout(LitSeqential):
     def forward(self, u, y):
         u_tilde = self.input_model(u)[0]
         # Then through the deterministic emission layer
-        initial_state = y[self.hparams.lookback_size - 1].unsqueeze(0).contiguous()
+        initial_state = y[self.hparams.lookback_size - 1].clone().unsqueeze(0)
         initial_state /= 3  # Scale down between (almost) [-1, 1]
         u_tilde = u_tilde[self.hparams.lookback_size :]
         forecast = self.emission(u_tilde, initial_state)[0] * 3
